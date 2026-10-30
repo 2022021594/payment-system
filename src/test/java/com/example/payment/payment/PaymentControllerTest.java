@@ -1,10 +1,12 @@
 package com.example.payment.payment;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,6 +23,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.example.payment.idempotency.IdempotencyKeyReuseException;
+import com.example.payment.idempotency.IdempotencyService;
+
 @WebMvcTest(PaymentController.class)
 class PaymentControllerTest {
 
@@ -30,8 +35,16 @@ class PaymentControllerTest {
 	@MockitoBean
 	PaymentService paymentService;
 
+	@MockitoBean
+	IdempotencyService idempotencyService;
+
 	private ResultActions postJson(String body) throws Exception {
 		return mockMvc.perform(post("/payments").contentType(MediaType.APPLICATION_JSON).content(body));
+	}
+
+	private ResultActions postJson(String body, String idempotencyKey) throws Exception {
+		return mockMvc.perform(post("/payments").contentType(MediaType.APPLICATION_JSON)
+				.header("Idempotency-Key", idempotencyKey).content(body));
 	}
 
 	@Test
@@ -172,7 +185,7 @@ class PaymentControllerTest {
 		when(paymentService.cancel(1L)).thenThrow(new PaymentCancelRejectedException("취소 불가"));
 
 		mockMvc.perform(post("/payments/1/cancel"))
-				.andExpect(status().isUnprocessableEntity())
+				.andExpect(status().isUnprocessableContent())
 				.andExpect(jsonPath("$.status").value(422));
 	}
 
@@ -191,6 +204,36 @@ class PaymentControllerTest {
 		when(paymentService.cancel(99L)).thenThrow(new PaymentNotFoundException(99L));
 
 		mockMvc.perform(post("/payments/99/cancel")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void skipsIdempotencyWhenHeaderIsAbsent() throws Exception {
+		when(paymentService.approve(1L)).thenReturn(new Payment("order-1", 1_000L));
+
+		mockMvc.perform(post("/payments/1/approve")).andExpect(status().isOk());
+
+		verifyNoInteractions(idempotencyService);
+	}
+
+	@Test
+	void delegatesToIdempotencyServiceWhenHeaderIsPresent() throws Exception {
+		when(idempotencyService.execute(eq("key-1"), eq("POST /payments/1/approve"), eq(PaymentResponse.class), any()))
+				.thenReturn(new PaymentResponse(1L, "order-1", 1_000L, "KRW", PaymentStatus.APPROVED, null));
+
+		mockMvc.perform(post("/payments/1/approve").header("Idempotency-Key", "key-1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("APPROVED"));
+
+		verify(paymentService, never()).approve(anyLong());
+	}
+
+	@Test
+	void returnsUnprocessableWhenIdempotencyKeyIsReused() throws Exception {
+		when(idempotencyService.execute(eq("key-1"), anyString(), eq(PaymentResponse.class), any()))
+				.thenThrow(new IdempotencyKeyReuseException());
+
+		postJson("{\"orderId\": \"order-1\", \"amount\": 1000}", "key-1")
+				.andExpect(status().isUnprocessableContent());
 	}
 
 }

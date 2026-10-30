@@ -30,7 +30,7 @@ public class PaymentExceptionHandler extends ResponseEntityExceptionHandler {
 
 	@ExceptionHandler(PaymentCancelRejectedException.class)
 	ProblemDetail handleCancelRejected(PaymentCancelRejectedException e) {
-		return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+		return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage());
 	}
 
 	@ExceptionHandler(PaymentNotFoundException.class)

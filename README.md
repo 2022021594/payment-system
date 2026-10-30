@@ -42,7 +42,7 @@ curl http://localhost:8080/actuator/health
 ./gradlew build
 ```
 
-테스트(`@SpringBootTest`)는 실제 PostgreSQL에 연결하므로, 먼저 `docker compose up -d`를 실행해야 합니다.
+테스트는 Testcontainers가 PostgreSQL 컨테이너를 자동으로 띄우므로 `docker compose`가 없어도 됩니다. Docker만 실행 중이면 됩니다.
 
 ## 환경 변수
 
@@ -60,7 +60,7 @@ curl http://localhost:8080/actuator/health
 ```
 src/main/java/com/example/payment/
 ├── PaymentSystemApplication.java
-└── payment/                  # 결제 도메인 (엔티티, 리포지토리)
+└── payment/                  # 결제 도메인 (엔티티, 리포지토리, 서비스, 컨트롤러, 예외 처리)
 src/main/resources/
 ├── application.yml           # 공통 설정
 ├── application-local.yml     # 로컬 개발용 (SQL 로그 등)

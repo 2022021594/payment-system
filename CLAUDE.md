@@ -11,7 +11,7 @@ Java 25 + Spring Boot 4.1.1 + Gradle 9.8.0(Wrapper) + PostgreSQL 17 기반 결�
 
 ```bash
 docker compose up -d                                      # PostgreSQL 기동 (호스트 포트 5433)
-./gradlew build                                           # 빌드 + 테스트 (DB가 떠 있어야 함)
+./gradlew build                                           # 빌드 + 테스트 (Testcontainers가 DB를 자동 기동, Docker만 필요)
 ./gradlew test --tests "com.example.payment.SomeTest"     # 단일 테스트
 ./gradlew bootRun --args='--spring.profiles.active=local' # 로컬 실행
 ```
@@ -21,12 +21,17 @@ Windows에서는 `.\gradlew.bat`을 사용합니다. 로컬에 Gradle이 설치�
 ## 규칙
 
 - **스키마 변경은 Flyway로만 합니다.** `src/main/resources/db/migration/V{n}__{설명}.sql` 파일을 새로 추가하고, 이미 적용된 마이그레이션 파일은 수정하지 않습니다. JPA는 `ddl-auto: validate`라서 엔티티와 스키마가 다르면 기동에 실패합니다.
-- **금액은 `BigDecimal` / `NUMERIC(19,2)`를 사용합니다.** `double`/`float`는 쓰지 않습니다.
+- **금액은 원 단위 정수 `long` / `BIGINT`를 사용합니다.** `double`/`float`는 쓰지 않고, 통화는 KRW 고정입니다.
 - **시간은 UTC로 저장합니다** (`TIMESTAMPTZ`, `OffsetDateTime`, `hibernate.jdbc.time_zone=UTC`).
 - 엔티티에서 enum은 `@Enumerated(EnumType.STRING)`으로 저장합니다.
 - `spring.jpa.open-in-view=false`이므로 트랜잭션 경계는 서비스 계층에서 관리합니다.
 - 도메인별로 패키지를 나눕니다 (예: `com.example.payment.payment`).
 - DB 접속 정보는 환경변수(`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`)로 덮어씁니다. 비밀값은 커밋하지 않습니다.
+
+## 테스트
+
+- DB가 필요한 테스트는 `TestcontainersConfiguration`(`@ServiceConnection`)을 `@Import`해서 사용합니다. 로컬 DB나 `docker compose`에 의존하지 않습니다.
+- JPA 슬라이스 테스트는 `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)`를 함께 씁니다.
 
 ## 환경 관련 주의사항
 

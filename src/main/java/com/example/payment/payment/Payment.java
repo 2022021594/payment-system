@@ -1,6 +1,5 @@
 package com.example.payment.payment;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 import jakarta.persistence.Column;
@@ -18,6 +17,8 @@ import jakarta.persistence.Table;
 @Table(name = "payment")
 public class Payment {
 
+	public static final String CURRENCY_KRW = "KRW";
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -25,8 +26,8 @@ public class Payment {
 	@Column(name = "order_id", nullable = false, unique = true, length = 64)
 	private String orderId;
 
-	@Column(nullable = false, precision = 19, scale = 2)
-	private BigDecimal amount;
+	@Column(nullable = false)
+	private long amount;
 
 	@Column(nullable = false, length = 3)
 	private String currency;
@@ -44,10 +45,10 @@ public class Payment {
 	protected Payment() {
 	}
 
-	public Payment(String orderId, BigDecimal amount, String currency) {
+	public Payment(String orderId, long amount) {
 		this.orderId = orderId;
 		this.amount = amount;
-		this.currency = currency;
+		this.currency = CURRENCY_KRW;
 		this.status = PaymentStatus.READY;
 	}
 
@@ -70,7 +71,7 @@ public class Payment {
 		return orderId;
 	}
 
-	public BigDecimal getAmount() {
+	public long getAmount() {
 		return amount;
 	}
 

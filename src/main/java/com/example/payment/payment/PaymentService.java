@@ -27,4 +27,14 @@ public class PaymentService {
 		}
 	}
 
+	@Transactional(readOnly = true)
+	public Payment getById(Long id) {
+		return paymentRepository.findById(id).orElseThrow(() -> new PaymentNotFoundException(id));
+	}
+
+	@Transactional(readOnly = true)
+	public Payment getByOrderId(String orderId) {
+		return paymentRepository.findByOrderId(orderId).orElseThrow(() -> new PaymentNotFoundException(orderId));
+	}
+
 }

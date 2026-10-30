@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -82,6 +83,48 @@ class PaymentControllerTest {
 		postJson("{\"orderId\": \"order-1\", \"amount\": 1000}")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.status").value(409));
+	}
+
+	@Test
+	void getsPaymentById() throws Exception {
+		when(paymentService.getById(1L)).thenReturn(new Payment("order-1", 15_000L));
+
+		mockMvc.perform(get("/payments/1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.orderId").value("order-1"))
+				.andExpect(jsonPath("$.amount").value(15000))
+				.andExpect(jsonPath("$.status").value("READY"));
+	}
+
+	@Test
+	void returnsNotFoundForUnknownId() throws Exception {
+		when(paymentService.getById(99L)).thenThrow(new PaymentNotFoundException(99L));
+
+		mockMvc.perform(get("/payments/99"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.status").value(404));
+	}
+
+	@Test
+	void getsPaymentByOrderId() throws Exception {
+		when(paymentService.getByOrderId("order-1")).thenReturn(new Payment("order-1", 15_000L));
+
+		mockMvc.perform(get("/payments").param("orderId", "order-1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.orderId").value("order-1"));
+	}
+
+	@Test
+	void returnsNotFoundForUnknownOrderId() throws Exception {
+		when(paymentService.getByOrderId("nope")).thenThrow(new PaymentNotFoundException("nope"));
+
+		mockMvc.perform(get("/payments").param("orderId", "nope"))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void rejectsNonNumericId() throws Exception {
+		mockMvc.perform(get("/payments/abc")).andExpect(status().isBadRequest());
 	}
 
 }

@@ -54,4 +54,34 @@ class PaymentServiceTest {
 		assertThatThrownBy(() -> service.create("order-1", 1_000L)).isInstanceOf(DuplicateOrderException.class);
 	}
 
+	@Test
+	void getsPaymentById() {
+		Payment payment = new Payment("order-1", 1_000L);
+		when(repository.findById(1L)).thenReturn(Optional.of(payment));
+
+		assertThat(service.getById(1L)).isSameAs(payment);
+	}
+
+	@Test
+	void throwsWhenPaymentIdNotFound() {
+		when(repository.findById(1L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.getById(1L)).isInstanceOf(PaymentNotFoundException.class);
+	}
+
+	@Test
+	void getsPaymentByOrderId() {
+		Payment payment = new Payment("order-1", 1_000L);
+		when(repository.findByOrderId("order-1")).thenReturn(Optional.of(payment));
+
+		assertThat(service.getByOrderId("order-1")).isSameAs(payment);
+	}
+
+	@Test
+	void throwsWhenOrderIdNotFound() {
+		when(repository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.getByOrderId("order-1")).isInstanceOf(PaymentNotFoundException.class);
+	}
+
 }

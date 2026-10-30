@@ -63,6 +63,25 @@ public class Payment {
 		this.updatedAt = OffsetDateTime.now();
 	}
 
+	public void approve() {
+		transitionTo(PaymentStatus.APPROVED, PaymentStatus.READY);
+	}
+
+	public void fail() {
+		transitionTo(PaymentStatus.FAILED, PaymentStatus.READY);
+	}
+
+	public void cancel() {
+		transitionTo(PaymentStatus.CANCELED, PaymentStatus.APPROVED);
+	}
+
+	private void transitionTo(PaymentStatus target, PaymentStatus required) {
+		if (this.status != required) {
+			throw new InvalidPaymentStateException(this.status, target);
+		}
+		this.status = target;
+	}
+
 	public Long getId() {
 		return id;
 	}

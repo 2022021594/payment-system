@@ -9,8 +9,11 @@ public class PaymentService {
 
 	private final PaymentRepository paymentRepository;
 
-	public PaymentService(PaymentRepository paymentRepository) {
+	private final PaymentGateway paymentGateway;
+
+	public PaymentService(PaymentRepository paymentRepository, PaymentGateway paymentGateway) {
 		this.paymentRepository = paymentRepository;
+		this.paymentGateway = paymentGateway;
 	}
 
 	@Transactional
@@ -35,6 +38,26 @@ public class PaymentService {
 	@Transactional(readOnly = true)
 	public Payment getByOrderId(String orderId) {
 		return paymentRepository.findByOrderId(orderId).orElseThrow(() -> new PaymentNotFoundException(orderId));
+	}
+
+	/**
+	 * 결제를 승인한다. PG가 거절하면 예외 없이 FAILED로 저장한다.
+	 * 행 잠금을 잡은 채 PG를 호출하므로 같은 결제가 두 번 승인 요청되지 않는다.
+	 */
+	@Transactional
+	public Payment approve(Long id) {
+		Payment payment = paymentRepository.findByIdForUpdate(id).orElseThrow(() -> new PaymentNotFoundException(id));
+		if (payment.getStatus() != PaymentStatus.READY) {
+			throw new InvalidPaymentStateException(payment.getStatus(), PaymentStatus.APPROVED);
+		}
+		PaymentGatewayResult result = paymentGateway.approve(payment.getOrderId(), payment.getAmount());
+		if (result.approved()) {
+			payment.approve();
+		}
+		else {
+			payment.fail();
+		}
+		return payment;
 	}
 
 }

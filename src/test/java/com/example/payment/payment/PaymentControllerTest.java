@@ -127,4 +127,32 @@ class PaymentControllerTest {
 		mockMvc.perform(get("/payments/abc")).andExpect(status().isBadRequest());
 	}
 
+	@Test
+	void approvesPayment() throws Exception {
+		Payment payment = new Payment("order-1", 15_000L);
+		payment.approve();
+		when(paymentService.approve(1L)).thenReturn(payment);
+
+		mockMvc.perform(post("/payments/1/approve"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("APPROVED"));
+	}
+
+	@Test
+	void returnsConflictWhenApprovingInvalidState() throws Exception {
+		when(paymentService.approve(1L))
+				.thenThrow(new InvalidPaymentStateException(PaymentStatus.APPROVED, PaymentStatus.APPROVED));
+
+		mockMvc.perform(post("/payments/1/approve"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.status").value(409));
+	}
+
+	@Test
+	void returnsNotFoundWhenApprovingUnknownPayment() throws Exception {
+		when(paymentService.approve(99L)).thenThrow(new PaymentNotFoundException(99L));
+
+		mockMvc.perform(post("/payments/99/approve")).andExpect(status().isNotFound());
+	}
+
 }

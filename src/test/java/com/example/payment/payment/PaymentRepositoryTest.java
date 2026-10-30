@@ -40,4 +40,12 @@ class PaymentRepositoryTest {
 				.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
+	@Test
+	void findByIdForUpdateReturnsPayment() {
+		Payment saved = repository.saveAndFlush(new Payment("order-lock", 100L));
+
+		assertThat(repository.findByIdForUpdate(saved.getId())).isPresent();
+		assertThat(repository.findByIdForUpdate(-1L)).isEmpty();
+	}
+
 }

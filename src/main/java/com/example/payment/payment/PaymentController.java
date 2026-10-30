@@ -38,4 +38,9 @@ public class PaymentController {
 		return PaymentResponse.from(paymentService.getByOrderId(orderId));
 	}
 
+	@PostMapping("/{id}/approve")
+	public PaymentResponse approve(@PathVariable Long id) {
+		return PaymentResponse.from(paymentService.approve(id));
+	}
+
 }

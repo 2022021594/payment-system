@@ -3,6 +3,7 @@ package com.example.payment.payment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,9 @@ class PaymentServiceTest {
 
 	@Mock
 	PaymentRepository repository;
+
+	@Mock
+	PaymentGateway gateway;
 
 	@InjectMocks
 	PaymentService service;
@@ -82,6 +86,41 @@ class PaymentServiceTest {
 		when(repository.findByOrderId("order-1")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.getByOrderId("order-1")).isInstanceOf(PaymentNotFoundException.class);
+	}
+
+	@Test
+	void approvesReadyPayment() {
+		Payment payment = new Payment("order-1", 1_000L);
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
+		when(gateway.approve("order-1", 1_000L)).thenReturn(PaymentGatewayResult.success());
+
+		assertThat(service.approve(1L).getStatus()).isEqualTo(PaymentStatus.APPROVED);
+	}
+
+	@Test
+	void marksPaymentFailedWhenGatewayRejects() {
+		Payment payment = new Payment("order-1", 1_000L);
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
+		when(gateway.approve("order-1", 1_000L)).thenReturn(PaymentGatewayResult.rejected("한도 초과"));
+
+		assertThat(service.approve(1L).getStatus()).isEqualTo(PaymentStatus.FAILED);
+	}
+
+	@Test
+	void doesNotCallGatewayForNonReadyPayment() {
+		Payment payment = new Payment("order-1", 1_000L);
+		payment.approve();
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+		assertThatThrownBy(() -> service.approve(1L)).isInstanceOf(InvalidPaymentStateException.class);
+		verify(gateway, never()).approve(any(), anyLong());
+	}
+
+	@Test
+	void throwsWhenApprovingUnknownPayment() {
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.approve(1L)).isInstanceOf(PaymentNotFoundException.class);
 	}
 
 }

@@ -12,6 +12,71 @@ Java 25 + Spring Boot 4.1 + Gradle + PostgreSQL 기반 결제 시스템.
 | PostgreSQL | 17 (Docker) |
 | DB 마이그레이션 | Flyway |
 
+## 프로젝트 진행 상황
+
+### 체크리스트
+
+**구현됨**
+
+- [x] 프로젝트 기본 세팅: Java 25, Spring Boot 4.1.1, PostgreSQL 17, Flyway(`V1`~`V3`), Testcontainers
+- [x] 결제 생성 `POST /payments`: READY 상태, KRW 고정, 금액은 `long`/`BIGINT`, 같은 `orderId`는 409
+- [x] 요청 값 검증: `orderId` 비어 있지 않음·64자 이하, `amount` 양수 (실패 시 400)
+- [x] 결제 조회 `GET /payments/{id}`, `GET /payments?orderId=` (없으면 404)
+- [x] 결제 승인 `POST /payments/{id}/approve`: PG 승인 시 APPROVED, PG 거절 시 FAILED
+- [x] 결제 전액 취소 `POST /payments/{id}/cancel`: PG 취소 성공 시에만 CANCELED, PG 거절 시 상태 유지 + 422
+- [x] 상태 전이 검증: `Payment.approve()` / `fail()` / `cancel()`, 잘못된 전이는 409
+- [x] PG 연동 경계: `PaymentGateway` 인터페이스 + `FakePaymentGateway`
+- [x] 승인·취소 동시 처리 방지: 결제 행 잠금(`PESSIMISTIC_WRITE`)
+- [x] 멱등성 키 `Idempotency-Key`: 생성·승인·취소에 적용, 요청 동시 처리는 advisory lock으로 직렬화
+- [x] 오류 응답: 처리하는 예외와 Spring MVC 표준 예외를 ProblemDetail(RFC 9457) 형식으로 응답
+- [x] 테스트 73개: 엔티티·서비스 단위, `@WebMvcTest`, `@DataJpaTest`, `@SpringBootTest` 통합, 동시성 (Testcontainers 사용)
+
+**아직 안 한 일**
+
+- [ ] 실제 PG 연동 (현재는 Fake: 승인은 1,000만 원 이하만 허용, 취소는 항상 성공)
+- [ ] 부분 취소 (현재는 전액 취소만)
+- [ ] PG 성공 후 DB 저장 실패 시 정합성 처리 (보상, 재시도, 대사)
+- [ ] PG 거래 ID·거절 사유 저장 (DB에 컬럼 없음)
+- [ ] 결제 상태 변경 이력 테이블
+- [ ] 멱등성 키 만료·정리 (`idempotency_record`가 계속 쌓임)
+- [ ] `orderId` 형식 검증 (현재는 길이만 검증)
+- [ ] 처리되지 않은 예외(500)에 대한 공통 응답 핸들러
+- [ ] API 문서화 (OpenAPI)
+- [ ] 애플리케이션 로그 (메인 코드에 로깅 없음)
+
+### 결제 상태 흐름
+
+`PaymentStatus`는 READY, APPROVED, FAILED, CANCELED 네 가지이고, 전이는 `Payment` 엔티티가 검증합니다. FAILED와 CANCELED에서 나가는 전이는 없습니다.
+
+```mermaid
+stateDiagram-v2
+    [*] --> READY: POST /payments
+    READY --> APPROVED: 승인 (PG 승인 성공)
+    READY --> FAILED: 승인 (PG 승인 거절)
+    APPROVED --> CANCELED: 전액 취소 (PG 취소 성공)
+    FAILED --> [*]
+    CANCELED --> [*]
+```
+
+### 요청 처리 구조
+
+결제 생성·승인·취소(POST)는 `Idempotency-Key` 헤더가 있을 때만 `IdempotencyService`를 거칩니다. 조회(GET)와 헤더가 없는 요청은 곧바로 `PaymentService`로 갑니다. PG는 승인·취소에서만 호출됩니다.
+
+```mermaid
+flowchart TD
+    Client([클라이언트]) --> Controller["PaymentController<br/>/payments"]
+
+    Controller -- "GET, 또는 Idempotency-Key 없음" --> Service["PaymentService<br/>(@Transactional)"]
+    Controller -- "POST + Idempotency-Key" --> Idem["IdempotencyService<br/>advisory lock, 응답 재사용"]
+    Idem -- "처음 온 키: 실행" --> Service
+    Idem <--> IdemDB[("PostgreSQL<br/>idempotency_record")]
+
+    Service -- "생성·조회·상태 저장<br/>승인·취소는 행 잠금" --> Repo["PaymentRepository"]
+    Repo <--> DB[("PostgreSQL<br/>payment")]
+    Service -- "승인·취소만 호출" --> Gateway["PaymentGateway<br/>(FakePaymentGateway)"]
+
+    Controller -. "예외 발생 시" .-> Handler["PaymentExceptionHandler<br/>IdempotencyExceptionHandler<br/>→ ProblemDetail (400/404/409/422)"]
+
 ## 사전 요구사항
 
 - JDK 25
@@ -60,6 +125,7 @@ curl http://localhost:8080/actuator/health
 ```
 src/main/java/com/example/payment/
 ├── PaymentSystemApplication.java
+├── idempotency/              # 멱등성 키 (서비스, 저장 엔티티, 예외 처리)
 └── payment/                  # 결제 도메인 (엔티티, 리포지토리, 서비스, 컨트롤러, 예외 처리)
 src/main/resources/
 ├── application.yml           # 공통 설정

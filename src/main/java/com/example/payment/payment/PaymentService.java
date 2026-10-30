@@ -60,4 +60,22 @@ public class PaymentService {
 		return payment;
 	}
 
+	/**
+	 * 승인된 결제를 전액 취소한다. PG가 취소에 성공했을 때만 CANCELED로 바꾸고,
+	 * 거절되면 상태를 그대로 둔 채 {@link PaymentCancelRejectedException}을 던진다.
+	 */
+	@Transactional
+	public Payment cancel(Long id) {
+		Payment payment = paymentRepository.findByIdForUpdate(id).orElseThrow(() -> new PaymentNotFoundException(id));
+		if (payment.getStatus() != PaymentStatus.APPROVED) {
+			throw new InvalidPaymentStateException(payment.getStatus(), PaymentStatus.CANCELED);
+		}
+		PaymentGatewayResult result = paymentGateway.cancel(payment.getOrderId(), payment.getAmount());
+		if (!result.approved()) {
+			throw new PaymentCancelRejectedException(result.reason());
+		}
+		payment.cancel();
+		return payment;
+	}
+
 }

@@ -5,4 +5,7 @@ public interface PaymentGateway {
 
 	PaymentGatewayResult approve(String orderId, long amount);
 
+	/** 승인된 결제를 전액 취소한다. */
+	PaymentGatewayResult cancel(String orderId, long amount);
+
 }

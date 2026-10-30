@@ -16,4 +16,9 @@ public class FakePaymentGateway implements PaymentGateway {
 		return PaymentGatewayResult.success();
 	}
 
+	@Override
+	public PaymentGatewayResult cancel(String orderId, long amount) {
+		return PaymentGatewayResult.success();
+	}
+
 }

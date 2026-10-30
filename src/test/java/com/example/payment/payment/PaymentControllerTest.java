@@ -155,4 +155,42 @@ class PaymentControllerTest {
 		mockMvc.perform(post("/payments/99/approve")).andExpect(status().isNotFound());
 	}
 
+	@Test
+	void cancelsPayment() throws Exception {
+		Payment payment = new Payment("order-1", 15_000L);
+		payment.approve();
+		payment.cancel();
+		when(paymentService.cancel(1L)).thenReturn(payment);
+
+		mockMvc.perform(post("/payments/1/cancel"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("CANCELED"));
+	}
+
+	@Test
+	void returnsUnprocessableWhenGatewayRejectsCancel() throws Exception {
+		when(paymentService.cancel(1L)).thenThrow(new PaymentCancelRejectedException("취소 불가"));
+
+		mockMvc.perform(post("/payments/1/cancel"))
+				.andExpect(status().isUnprocessableEntity())
+				.andExpect(jsonPath("$.status").value(422));
+	}
+
+	@Test
+	void returnsConflictWhenCancelingAlreadyCanceledPayment() throws Exception {
+		when(paymentService.cancel(1L))
+				.thenThrow(new InvalidPaymentStateException(PaymentStatus.CANCELED, PaymentStatus.CANCELED));
+
+		mockMvc.perform(post("/payments/1/cancel"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.status").value(409));
+	}
+
+	@Test
+	void returnsNotFoundWhenCancelingUnknownPayment() throws Exception {
+		when(paymentService.cancel(99L)).thenThrow(new PaymentNotFoundException(99L));
+
+		mockMvc.perform(post("/payments/99/cancel")).andExpect(status().isNotFound());
+	}
+
 }

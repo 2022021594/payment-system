@@ -123,4 +123,53 @@ class PaymentServiceTest {
 		assertThatThrownBy(() -> service.approve(1L)).isInstanceOf(PaymentNotFoundException.class);
 	}
 
+	private Payment approvedPayment() {
+		Payment payment = new Payment("order-1", 1_000L);
+		payment.approve();
+		return payment;
+	}
+
+	@Test
+	void cancelsApprovedPayment() {
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(approvedPayment()));
+		when(gateway.cancel("order-1", 1_000L)).thenReturn(PaymentGatewayResult.success());
+
+		assertThat(service.cancel(1L).getStatus()).isEqualTo(PaymentStatus.CANCELED);
+	}
+
+	@Test
+	void keepsStatusWhenGatewayRejectsCancel() {
+		Payment payment = approvedPayment();
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
+		when(gateway.cancel("order-1", 1_000L)).thenReturn(PaymentGatewayResult.rejected("취소 불가"));
+
+		assertThatThrownBy(() -> service.cancel(1L)).isInstanceOf(PaymentCancelRejectedException.class);
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
+	}
+
+	@Test
+	void rejectsCancelOfAlreadyCanceledPayment() {
+		Payment payment = approvedPayment();
+		payment.cancel();
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+		assertThatThrownBy(() -> service.cancel(1L)).isInstanceOf(InvalidPaymentStateException.class);
+		verify(gateway, never()).cancel(any(), anyLong());
+	}
+
+	@Test
+	void rejectsCancelOfNotApprovedPayment() {
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(new Payment("order-1", 1_000L)));
+
+		assertThatThrownBy(() -> service.cancel(1L)).isInstanceOf(InvalidPaymentStateException.class);
+		verify(gateway, never()).cancel(any(), anyLong());
+	}
+
+	@Test
+	void throwsWhenCancelingUnknownPayment() {
+		when(repository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.cancel(1L)).isInstanceOf(PaymentNotFoundException.class);
+	}
+
 }

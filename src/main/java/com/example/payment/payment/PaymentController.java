@@ -43,4 +43,9 @@ public class PaymentController {
 		return PaymentResponse.from(paymentService.approve(id));
 	}
 
+	@PostMapping("/{id}/cancel")
+	public PaymentResponse cancel(@PathVariable Long id) {
+		return PaymentResponse.from(paymentService.cancel(id));
+	}
+
 }

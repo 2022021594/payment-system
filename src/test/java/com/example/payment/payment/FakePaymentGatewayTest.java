@@ -21,4 +21,9 @@ class FakePaymentGatewayTest {
 		assertThat(result.reason()).isNotBlank();
 	}
 
+	@Test
+	void cancelSucceeds() {
+		assertThat(gateway.cancel("order-1", 1_000L).approved()).isTrue();
+	}
+
 }
